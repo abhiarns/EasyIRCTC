@@ -1,9 +1,10 @@
-'''   
+'''
+
                 ******          Bugs            ******
                 No Bugs. Things working  fine     
 
-                ******          To Do            ******
-                3.      Try to implement muti-processing
+                ******          To Do           ******
+                Nothing
 '''
 #===========================            Modules          ================================
 from selenium import webdriver
@@ -14,10 +15,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 import time
 from datetime import datetime
+from datetime import timedelta  
 from tkinter import ttk
 from tkinter import *
 import os
-
+import json
 #==========================   Global Variables        ============================
 userID =  ""                                        
 password =    ""                      
@@ -25,14 +27,13 @@ fromStationCode = ""
 toStationCode =  ""
 trainNo = ''
 journeyDate =  ''               # '04-02-2018'
-travelClass = "SL" 
-travelQuota = "GN" 
-mobileNo = 9123456789        
+travelClass = "" 
+travelQuota = "" 
+mobileNo = 0       
 paymentPreference = 0                   #        {  'Other':0 , 'PayTM':1, 'UPI':2   }
-PaytmMobileNo = 1234567890
+PaytmMobileNo = 0
 vpa = 'test@test'
 driver = None
-
 noOfPassenger = 0
 noOfPassengersSaved = 0
 passengerDetails = []
@@ -44,16 +45,17 @@ hr=11
 min=42
 sec=1
 moment = datetime.now().replace(hour=hr, minute=min, second=sec, microsecond=000000)
+finalMoment = moment
+
 firstCaptchaTime = 15
 secondCaptchaTime = 15
-makeThemBelieveTime = 10
+makeThemBelieveTime = 45  # this is seconds from moment
 
-BackgroundColor = "#F7EE83" # "#333"
-LabelColor = "#B6B6E8"                        #                 "#B6B6E8"
+BackgroundColor = "#E0F6FC"             # "#333"
+LabelColor = "#2F6FB5"                        #                 "#B6B6E8"
 LabelFont = "segoe ui"
 LabelFontSize = 12
-LabelFG = 'black'
-
+LabelFG = 'white'
 hlc = 'blue'           #hight light color
 hlt = 2   # high light thickness
 
@@ -61,7 +63,7 @@ seePswdVar = 0
 # ====================================       Main Window settings    ===========================
                                   
 app = Tk()
-app.geometry('1010x600+75+0')
+app.geometry('1010x600+100+0')
 app.title("Indian Railways Fast Booking Helper")
 app["bg"] = BackgroundColor
 
@@ -113,9 +115,8 @@ timeDiffFrame = Frame(tatkalFrame, highlightcolor=hlc,  highlightthickness=hlt)
 mainButtonsFrame = Frame(app)
 #====================================== Buttons      ==================================
 s = ttk.Style()
-
-
 s.configure('TButton', font=('Helvetica', 12))
+
 insertButton = ttk.Button(psgrBtnFrame, text="Insert"   )
 showInsertedButton = ttk.Button(psgrBtnFrame, text="Show Inserted")
 clearBtn = ttk.Button(psgrBtnFrame, text="Clear Inserted")
@@ -124,8 +125,10 @@ showInsertedButton.pack(side='left')
 clearBtn.pack(side='left')
 
 instructionButton = ttk.Button(mainButtonsFrame, text="Instructions"   )
+saveAllButton = ttk.Button(mainButtonsFrame, text="Save all data"   )
 launchBtn = ttk.Button(mainButtonsFrame, text="Launch")
 instructionButton.pack(side='left')
+saveAllButton.pack(side='left')
 launchBtn.pack(side='left')
 
 #================================== Dynamic labels / Entry ===============================
@@ -141,7 +144,7 @@ TimeDiff = Label(timeDiffFrame,
                   fg =LabelFG,
                    font =(LabelFont , LabelFontSize)
                    )
-noOfPassengerCb = ttk.Combobox(noOfPsngrFrame,font =(LabelFont , LabelFontSize), width = 5)
+noOfPassengerCb = ttk.Combobox(noOfPsngrFrame,font =(LabelFont , LabelFontSize), width = 5, state="readonly")
 seePswdLbl = Label(loginFrame,height = 1,
                    bg =LabelColor,
                   fg =LabelFG,
@@ -156,7 +159,8 @@ def starter():
 
 # Doing Login 
 def Login():       
-        unameBox=driver.find_element_by_id('usernameId')
+        #WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.ID,"usernameId")))
+        unameBox=WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.ID,"usernameId")))
         unameBox.send_keys(userID)
         upwd = driver.find_element_by_class_name('loginPassword')
         upwd.send_keys(password)
@@ -182,7 +186,7 @@ def Login():
 
 # Automatic Entry on PlanMyJourney area
 def planMyJourney():
-        fromStn = driver.find_element_by_xpath('//input[@id="jpform:fromStation"]')
+        fromStn = WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.XPATH, '//input[@id="jpform:fromStation"]')))
         fromStn.send_keys(fromStationCode)       
         fromStn.send_keys(Keys.ENTER)        
         
@@ -218,7 +222,7 @@ def QuotaTrainClass():
         base = r'//form[@id="avlAndFareForm"]//a[@id="' + trainNo+ '-' + travelClass + '-' + travelQuota + '-0"]'
         checkAvailable = base + '//parent::td'
 
-        availability =WebDriverWait(driver, 2, poll_frequency=0.1).until(EC.presence_of_element_located((By.XPATH, checkAvailable))).text
+        availability =WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.XPATH, checkAvailable))).text
 
         if(availability.find("AVAILABLE") >= 0):
                 bookNowLink = driver.find_element_by_xpath(base)
@@ -240,7 +244,10 @@ def FillUpPassengerDetails():
                         m=1
         except:
                 pass
-        
+
+        base = r'//*[@id="addPassengerForm:psdetail:' + str(0) + r'"]/td[2]/input'
+        xyz = WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.XPATH,base)))
+
         for i in range(len(passengerDetails)):
                 try:
                         base = r'//*[@id="addPassengerForm:psdetail:' + str(i) + r'"]/td[2]/input'
@@ -278,8 +285,22 @@ def FillUpPassengerDetails():
         ISD_MobileNo_Box.send_keys(mobileNo)
 
         time.sleep(secondCaptchaTime)
-        nextBtn = driver.find_element_by_id('validate')
-        nextBtn.click()
+
+        doItOnce        =       0
+
+        if(datetime.now().time().hour == 11 and datetime.now().time().minute<11 and(travelQuota=="TQ" or travelQuota=="PT")) :
+                #print("yes 1")
+                while True:
+                        if(datetime.now().time() > finalMoment.time() and doItOnce==0):
+                                #print("yes 2")
+                                doItOnce=1
+                                nextBtn = driver.find_element_by_id('validate')
+                                nextBtn.click()
+                                break
+        else:
+                #print("yes 3")
+                nextBtn = driver.find_element_by_id('validate')
+                nextBtn.click()
 
 #MakePayment function 
 def processPayment():
@@ -297,7 +318,7 @@ def PaytmWallet():
 
         processPayment()
 
-        loginPaytm =WebDriverWait(driver, 15, poll_frequency=0.1).until(EC.presence_of_element_located((By.ID,"otp-btn")))
+        loginPaytm =WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.ID,"otp-btn")))
         loginPaytm.click()
 
         temp = WebDriverWait(driver,15,poll_frequency=0.1).until(EC.frame_to_be_available_and_switch_to_it((By.ID,'login-iframe')))
@@ -310,7 +331,7 @@ def PaytmWallet():
 
 # 2. UPI
 def BHIM_UPI():
-        upiRadioBtn = driver.find_element_by_name('UPI_VPA')
+        upiRadioBtn = WebDriverWait(driver, 30, poll_frequency=0.1).until(EC.presence_of_element_located((By.NAME,"UPI_VPA")))
         upiRadioBtn.click()
 
         processPayment()
@@ -330,7 +351,7 @@ def firstPart():
 def secondPart():
         QuotaTrainClass()
         FillUpPassengerDetails()
-
+                               
         journeySummaryPage = WebDriverWait(driver, 15, poll_frequency=0.1).until(EC.title_is("Book Ticket - Journey Summary"))
         #time.sleep(makeThemBelieveTime)
 
@@ -341,7 +362,7 @@ def secondPart():
         else:
             pass
 
-        time.sleep(900)                 #15 minute time to do things manually ( ONLY IF WEBDRIVER FAILS /  User choses other payment option )
+        #time.sleep(900)                 #15 minute time to do things manually ( ONLY IF WEBDRIVER FAILS /  User choses other payment option )
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
@@ -484,7 +505,7 @@ def insertButtonFn():
             elif(berthCb.get() == "Coupe"):
                 tempList.append('CP')
             else:
-                tempList.append('LB')
+                tempList.append("  ")
 
             if (foodCb.get() == "Veg"):
                 tempList.append('V')
@@ -549,7 +570,7 @@ def instructionFn():
         instr.geometry("900x500+25+25")
         lbl = Label(instr, font=(LabelFont,LabelFontSize), justify='left')
         lbl['text'] = "INSTRUCTIONS TO USE THIS SOFTWARE\n\n\n\
-1. Fill all details from top to bottom.\n\n\
+1. Fill all details from top to bottom in CORRECT FORMAT. Example: Date is DD-MM-YYYY and Time is HH:MM:SS\n\n\
 2. When booking has started, you will be required to enter 3 things only : 2 Captchas and 1 Otp / UPI PIN .\
 \n      We recommend payment using Paytm/UPI as these methods are much faster than other methods.\
 \n      DO NOT CLICK/ENTER ANYTHING ELSE. We have taken care of all the cases.\
@@ -565,15 +586,48 @@ def instructionFn():
 "
         lbl.grid(row = 0)       
 
+def saveAllFn():
+        allData = {}
+        allData['IRCTCUserID'] = userID
+        allData['IRCTCPassword'] = password
+        allData['FromStationCode'] = fromStationCode
+        allData['ToStationCode'] = toStationCode
+        allData['JourneyDate'] = journeyDate
+        allData['TrainNo'] = trainNo
+        allData['TravelQuota'] = travelQuota
+        allData['TravelClass'] = travelClass
+        allData['TotalnoofPassenger'] = noOfPassenger
+        allData['PassengerDetails'] = passengerDetails
+        allData['NoOfPassengersSaved'] = noOfPassengersSaved
+        allData['MobileNumber'] = mobileNo
+        allData['PaymentPreference'] = paymentPreference
+        if(paymentPreference == 2):
+                allData['VPA'] = vpa
+        elif(paymentPreference == 1):
+                allData['PaytmMobileNo'] = PaytmMobileNo
+        else:
+                pass
+
+        s = json.dumps(allData)
+        with open('data.txt','w' ) as f:
+                f.write(s)
+
+
+        
+
 def launchFn():
+        global finalMoment
+        cls()
         clickOn = 0
         firstPart()
         if(travelQuota == "TQ" or travelQuota == "PT"):
                 while True:
                         if(moment.hour == datetime.now().time().hour and moment.minute == datetime.now().time().minute 
                            and moment.second== datetime.now().time().second and clickOn==0):
+                                finalMoment = datetime.now() + timedelta(seconds=makeThemBelieveTime)
                                 clickOn =1
-                                secondPart()                       
+                                break
+                secondPart()
         else:
                 secondPart()
 
@@ -815,12 +869,13 @@ travelQuotaLbl = Label(travelQuotaFrame ,  text="Travel Quota",
                        ).pack(side='left')
 travelQuotaCb = ttk.Combobox(travelQuotaFrame,
                              width = 30,
-                             font =(LabelFont , LabelFontSize)
+                             font =(LabelFont , LabelFontSize), 
+                             state="readonly"
                              )
 travelQuotaCb['values'] = ("PREMIUM TATKAL  (PT)",
                                                             "LOWER BERTH/SR. CITIZEN  (SS)",
                                                             "GENERAL  (GN)",
-                                                            "DIVYANG  (HP)",
+                                                            "DIVYANGJAN  (HP)",
                                                             "LADIES  (LD)",
                                                             "TATKAL  (TQ)"
                                                         )
@@ -838,9 +893,11 @@ travelClassLbl = Label(travelClassFrame ,  text="Travel Class",
                        ).pack(side='left')
 travelClassCb = ttk.Combobox(travelClassFrame,
                              width = 25,
-                             font =(LabelFont , LabelFontSize)
+                             font =(LabelFont , LabelFontSize),
+                            state="readonly"
                              )
-travelClassCb['values'] = ("EXECUTIVE ANUBHUTI  (EA)",
+travelClassCb['values'] = (
+                                                        "EXECUTIVE ANUBHUTI  (EA)",
                                                         "FIRST AC  (1A)", 
                                                         "EXECUTIVE CLASS  (EC)",
                                                         "SECOND AC  (2A)",
@@ -888,8 +945,8 @@ genderLabel = Label(genderFrame,
                 fg =LabelFG,
                 font =(LabelFont , LabelFontSize)
                 ).pack(side='top', fill ='both')
-genderCb = ttk.Combobox(genderFrame,font =(LabelFont , LabelFontSize), width = 15)
-genderCb['values'] = ("Male", "Female", "Transgender")
+genderCb = ttk.Combobox(genderFrame,font =(LabelFont , LabelFontSize), width = 15, state="readonly")
+genderCb['values'] = ("Male", "Female", "Others")
 genderCb.bind("<<ComboboxSelected>>")
 genderCb.pack(side='bottom')
 
@@ -899,7 +956,7 @@ berthLabel = Label(berthFrame,
                 bg =LabelColor,
                 fg =LabelFG,
                 font =(LabelFont , LabelFontSize)).pack(side='top', fill ='both')
-berthCb = ttk.Combobox(berthFrame,font =(LabelFont , LabelFontSize), width = 15)
+berthCb = ttk.Combobox(berthFrame,font =(LabelFont , LabelFontSize), width = 15, state="readonly")
 berthCb['values'] = ("Lower", "Middle", "Upper", "Side Lower", "Side Upper", "Window Side", "Cabin", "Coupe","No preference")
 berthCb.bind("<<ComboboxSelected>>")
 berthCb.pack(side='bottom')
@@ -910,7 +967,7 @@ foodLabel = Label(foodFrame,
                 bg =LabelColor,
                 fg =LabelFG,
                 font =(LabelFont , LabelFontSize)).pack(side='top', fill ='both')
-foodCb = ttk.Combobox(foodFrame,font =(LabelFont , LabelFontSize), width = 10)
+foodCb = ttk.Combobox(foodFrame,font =(LabelFont , LabelFontSize), width = 10, state="readonly")
 foodCb['values'] = ("Veg", "Non Veg", "No Food")
 foodCb.bind("<<ComboboxSelected>>")
 foodCb.pack(side='bottom')
@@ -996,7 +1053,7 @@ paymentLabel = Label(paymentPreferFrame, text = "Payment Preference",
                                            bg =LabelColor,
                                            fg =LabelFG,
                                            font =(LabelFont , LabelFontSize)).pack(side='left')
-paymentCb = ttk.Combobox(paymentPreferFrame,font =(LabelFont , LabelFontSize), width = 10)
+paymentCb = ttk.Combobox(paymentPreferFrame,font =(LabelFont , LabelFontSize), width = 10, state="readonly")
 paymentCb['values'] = ("BHIM / UPI", "Paytm", "Other" )
 paymentCb.bind("<<ComboboxSelected>>", paymentCbFn)
 paymentCb.pack(side='left')
@@ -1024,10 +1081,131 @@ TimeDiff.pack(side='left')
 #main buttons
 verticalSpacer10.grid(row = 17)
 instructionButton['command']= instructionFn
+saveAllButton['command'] = saveAllFn
 launchBtn['command'] = launchFn
 mainButtonsFrame.grid(row = 18)
 
 #=========================      Running App     =====================
+#fetch if any previous data exists
+try:
+        f = open('data.txt','r')
+        s = f.read()
+        allData = json.loads(s)
+        #print(allData)
+        
+        userIDEntry.insert(0, allData['IRCTCUserID'])
+        userID = allData['IRCTCUserID']
+
+        passwordEntry.insert(0,allData['IRCTCPassword'])
+        password = allData['IRCTCPassword']
+
+        fromStnEntry.insert(0,allData['FromStationCode'])
+        fromStationCode = allData['FromStationCode']
+
+        toStnEntry.insert(0,allData['ToStationCode'])
+        toStationCode = allData['ToStationCode']
+
+        jDateEntry.insert(0,allData['JourneyDate'])
+        journeyDate = allData['JourneyDate']
+
+        trainNoEntry.insert(0,allData['TrainNo'])
+        trainNo = allData['TrainNo']
+
+        temp = allData['TravelQuota']
+
+        if(temp == "PT"):
+                travelQuotaCb.set("PREMIUM TATKAL  (PT)")
+                travelQuota = 'PT'
+        elif(temp == "SS"):
+                travelQuotaCb.set("LOWER BERTH/SR. CITIZEN  (SS)")
+                travelQuota = 'SS'
+        elif(temp == "GN"):
+                travelQuotaCb.set("GENERAL  (GN)")
+                travelQuota = 'GN'
+        elif(temp == "HP"):
+                travelQuotaCb.set("DIVYANGJAN  (HP)")
+                travelQuota = 'HP'
+        elif(temp == "LD"):
+                travelQuotaCb.set("LADIES  (LD)")
+                travelQuota = 'LD'
+        elif(temp == "TQ"):
+                travelQuotaCb.set("TATKAL  (TQ)")
+                travelQuota = 'TQ'
+        else:
+                pass
+
+        temp = allData['TravelClass']
+
+        if(temp == "EA"):
+                travelClassCb.set("EXECUTIVE ANUBHUTI  (EA)")
+                travelClass = "EA"
+        elif(temp == "1A"):
+                travelClassCb.set("FIRST AC  (1A)")
+                travelClass = "1A"
+        elif(temp == "EC"):
+                travelClassCb.set("EXECUTIVE CLASS  (EC)")
+                travelClass = "EC"
+        elif(temp == "2A"):
+                travelClassCb.set("SECOND AC  (2A)")
+                travelClass = "2A"
+        elif(temp == "FC"):
+                travelClassCb.set("FIRST CLASS  (FC)")
+                travelClass = "FC"
+        elif(temp == "3A"):
+                travelClassCb.set("THIRD AC  (3A)")
+                travelClass = "3A"
+        elif(temp == "3E"):
+                travelClassCb.set("THIRD AC ECONOMY  (3E)")
+                travelClass = "3E"
+        elif(temp == "CC"):
+                travelClassCb.set("CHAIR CAR  (CC)")
+                travelClass = "CC"
+        elif(temp == "SL"):
+                travelClassCb.set("SLEEPER CLASS  (SL)")
+                travelClass = "SL"
+        elif(temp == "2S"):
+                travelClassCb.set("SECOND SITTING  (2S)")
+                travelClass = "2S"
+        else:
+                pass
+
+        noOfPassengerCb.set(allData['TotalnoofPassenger'])
+        noOfPassenger = allData['TotalnoofPassenger']
+
+        passengerDetails = allData['PassengerDetails'] 
+
+        noOfPassengersSaved = allData['NoOfPassengersSaved']
+        psgrInsertedLabel.pack(side='top', fill ='both')
+        psgrInsertedLabel['bg'] = LabelColor
+        psgrInsertedLabel['text'] =str(noOfPassengersSaved) + "  INSERTED"
+
+        psgrMobNoEntry.insert(0,  allData['MobileNumber'] )
+        mobileNo  = allData['MobileNumber']
+
+        temp = allData['PaymentPreference']
+
+        if( temp == 2):
+                paymentCb.set("BHIM / UPI")
+                upiEntry.insert(0, allData['VPA'])
+                vpa = allData['VPA']
+                paymentPreference = allData['PaymentPreference']
+                paytmFrame.pack_forget()
+                upiFrame.pack()
+        elif( temp == 1):
+                paymentCb.set("Paytm")
+                paytmEntry.insert(0, allData['PaytmMobileNo'])
+                PaytmMobileNo = allData['PaytmMobileNo']
+                paymentPreference = allData['PaymentPreference']
+                upiFrame.pack_forget()
+                paytmFrame.pack()
+        else:
+                paymentPreference = 0
+                upiFrame.pack_forget()
+                paytmFrame.pack_forget()
+                pass
+
+except:
+        pass
 
 app.after(0, clock)
 app.mainloop()
@@ -1095,6 +1273,6 @@ except:
 
 
 
-        Made with Love by abhiARNS
+        Made with Love
 '''
 
