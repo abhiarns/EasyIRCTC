@@ -1,4 +1,4 @@
-Train ticket booking helper
+Train ticket booking helper (not working after recent IRCTC website update)
 
 Use it for personal use only.
 
